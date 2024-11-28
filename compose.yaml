@@ -1,0 +1,108 @@
+services:
+  init:
+    container_name: pyhss.init
+    image: busybox
+
+    # Note: almquist (ash) shell syntax is used here!
+    entrypoint: /bin/sh -c
+    command: |
+              '''
+              # Change ownership and permissions
+              chown -R 5050:5050 /volumes/pgadmin
+              chmod -R u=rwX,go=rX /volumes/*
+              '''
+    volumes:
+     - ./.local/pgadmin:/volumes/pgadmin
+    restart: "no"
+
+  pyhss:
+    image: pyhss:${PYHSS_VERSION}
+    container_name: pyhss
+    build:
+      context: ./source
+      dockerfile: ./Dockerfile
+      args:
+        - VERSION=${PYHSS_VERSION}
+    env_file:
+      - .secret
+    environment:
+      - COMPONENT_NAME=${PYHSS_COMPONENT}
+    volumes:
+      - ./.local/pyhss:/mnt/hss
+      - ./config.yaml:/pyhss/config.yaml
+    ports:
+      - "3868:3868/tcp"
+      - "3868:3868/sctp"
+      - "8080:8080"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      psql.0:
+        condition: service_healthy
+    restart: "no"
+
+  # REQ: sudo sysctl vm.overcommit_memory=1
+  redis:
+    container_name: pyhss.redis
+    image: redis:${REDIS_VERSION}
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: "grep -q $$(printf %.2X%.2X%.2X%.2X:%.4X 0 0 0 0 6379) /proc/net/tcp"
+      interval: 5s
+      retries: 60
+    restart: unless-stopped
+
+  psql.0:
+    image: postgres:${POSTGRES_VERSION}
+    container_name: pyhss.psql.0
+    env_file:
+      - .secret
+    environment:
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./.local/pgdata:/var/lib/postgresql/data/pgdata
+    depends_on:
+      init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: "grep -q $$(printf %.2X%.2X%.2X%.2X:%.4X 0 0 0 0 5432) /proc/net/tcp"
+      interval: 5s
+      retries: 60
+    restart: unless-stopped
+
+  pgadmin:
+    container_name: pyhss.pgadmin
+    image: dpage/pgadmin4:${PGADMIN_VERSION}
+    env_file:
+      - .secret
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - ./.local/pgadmin:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+      psql.0:
+        condition: service_healthy
+    healthcheck:
+      test: "grep -q $$(printf %.2X%.2X%.2X%.2X:%.4X 0 0 0 0 80) /proc/net/tcp"
+      interval: 5s
+      retries: 60
+    restart: unless-stopped
+
+# Use the command below to create a network:
+# $> docker network create pyhss-internal
+networks:
+  default:
+    external: true
+    name: "pyhss-internal"
