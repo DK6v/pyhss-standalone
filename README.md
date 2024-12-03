@@ -12,7 +12,7 @@ docker compose up
 ```
 
 ### Swagger API
-[http://localhost:8080/docs/](http://localhost:8080/docs/)
+[http://localhost:8080/docs/](http://localhost:5000/docs/)
 
 ### PgAdmin
 [http://localhost:5050](http://localhost:5050)

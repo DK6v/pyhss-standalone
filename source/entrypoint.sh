@@ -43,6 +43,9 @@ substitute_variables() {
            > "$output"
 }
 
+echo "---- Environment variables ----"
+env | awk '{ print ">", $0 }'
+
 if [ -f "config.yaml" ]; then
     echo "Updating config for PyHSS"
     substitute_variables "config.yaml" "./runtime/config.yaml"
@@ -53,8 +56,8 @@ fi
 
 cd ./runtime || exit $ENOENT
 
-echo "PyHSS Config:"
-cat config.yaml
+echo "---- PyHSS Config ----"
+cat config.yaml | awk '{ print ">", $0 }'
 
 echo "RUN: $*"
 exec "$@"

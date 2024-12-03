@@ -7,12 +7,18 @@ services:
     entrypoint: /bin/sh -c
     command: |
               '''
-              # Change ownership and permissions
-              chown -R 5050:5050 /volumes/pgadmin
-              chmod -R u=rwX,go=rX /volumes/*
+              # Create sub-directories
+              mkdir -p /mnt/local/pgadmin
+              # Change ownership
+              chown -R :docker /mnt/local
+              chown -R 5050 /mnt/local/pgadmin
+              # Change permissions
+              chmod -R ug=rwX,o=rX /mnt/local
               '''
     volumes:
-     - ./.local/pgadmin:/volumes/pgadmin
+      # Mount the 'docker' GID to grant permissions.
+      - /etc/group:/etc/group:ro
+      - ./.local:/mnt/local
     restart: "no"
 
   pyhss:
@@ -26,14 +32,18 @@ services:
     env_file:
       - .secret
     environment:
-      - COMPONENT_NAME=${PYHSS_COMPONENT}
+      - PYHSS_COMPONENT_NAME=${PYHSS_COMPONENT_NAME:-HSS}
+      - PYHSS_LOG_ENABLED=false
+      - PYHSS_LOG_DIR=/pyhss/logs
     volumes:
       - ./.local/pyhss:/mnt/hss
+      - ./.local/logs:/pyhss/logs
       - ./config.yaml:/pyhss/config.yaml
     ports:
       - "3868:3868/tcp"
       - "3868:3868/sctp"
-      - "8080:8080"
+      # Swagger API
+      - "5000:8080"
     depends_on:
       init:
         condition: service_completed_successfully
@@ -43,7 +53,8 @@ services:
         condition: service_healthy
     restart: "no"
 
-  # REQ: sudo sysctl vm.overcommit_memory=1
+  # Required by redis:
+  # - sudo sysctl vm.overcommit_memory=1
   redis:
     container_name: pyhss.redis
     image: redis:${REDIS_VERSION}
@@ -85,6 +96,8 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: 30
+      GUNICORN_ACCESS_LOGFILE: /dev/null
     volumes:
       - ./.local/pgadmin:/var/lib/pgadmin
     ports:
@@ -98,7 +111,7 @@ services:
       test: "grep -q $$(printf %.2X%.2X%.2X%.2X:%.4X 0 0 0 0 80) /proc/net/tcp"
       interval: 5s
       retries: 60
-    restart: unless-stopped
+    restart: "no"
 
 # Use the command below to create a network:
 # $> docker network create pyhss-internal

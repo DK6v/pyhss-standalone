@@ -49,9 +49,9 @@ hss:
 logging:
   level: DEBUG
   logfiles:
-    hss_logging_file: log/hss.log
-    diameter_logging_file: log/diameter.log
-    database_logging_file: log/db.log
+    hss_logging_file: ${PYHSS_LOG_DIR}/hss.log
+    diameter_logging_file: ${PYHSS_LOG_DIR}/diameter.log
+    database_logging_file: ${PYHSS_LOG_DIR}/db.log
   log_to_terminal: true
 
 ## Database Parameters
